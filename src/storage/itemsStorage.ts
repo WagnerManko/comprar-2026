@@ -20,4 +20,57 @@ async function getByStatus(status: FilterStatus): Promise<ItemProps[]> {
   return items.filter((item) => item.status === status);
 }
 
-export const itemsStorage = { get, getByStatus };
+async function save(items: ItemProps[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(ITEMS_STORAGE_KEY, JSON.stringify(items));
+  } catch (error) {
+    throw new Error("SAVE_ITEMS: " + error);
+  }
+}
+
+async function add(newItem: ItemProps): Promise<ItemProps[]> {
+  const items = await get();
+  const updatedItems = [...items, newItem];
+  await save(updatedItems);
+  return updatedItems;
+}
+
+async function remove(id: string) {
+  const items = await get();
+  const updatedItems = items.filter((item) => item.id !== id);
+  await save(updatedItems);
+}
+
+async function clear() {
+  try {
+    await AsyncStorage.removeItem(ITEMS_STORAGE_KEY);
+  } catch (error) {
+    throw new Error("CLEAR_ITEMS: " + error);
+  }
+}
+
+async function toggleStatus(id: string) {
+  const items = await get();
+
+  const updatedItems = items.map((item) =>
+    item.id === id
+      ? {
+          ...item,
+          status:
+            item.status === FilterStatus.PENDING
+              ? FilterStatus.DONE
+              : FilterStatus.PENDING,
+        }
+      : item,
+  );
+
+  await save(updatedItems);
+}
+export const itemsStorage = {
+  get,
+  getByStatus,
+  add,
+  remove,
+  clear,
+  toggleStatus,
+};

@@ -13,8 +13,9 @@ import { Input } from "@/components/Input";
 import { Filter } from "@/components/Filter";
 import { FilterStatus } from "@/types/FilterStatus";
 import { Item } from "@/components/Item";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ItemProps } from "@/types/Item";
+import { itemsStorage } from "@/storage/itemsStorage";
 
 const LISTA: FilterStatus[] = [FilterStatus.PENDING, FilterStatus.DONE];
 
@@ -23,7 +24,7 @@ export function Home() {
   const [itemDescription, setItemDescription] = useState("");
   const [items, setItems] = useState<ItemProps[]>([]);
 
-  function handleAdd() {
+  async function handleAdd() {
     if (!itemDescription.trim()) {
       return Alert.alert(
         "Atenção",
@@ -37,13 +38,72 @@ export function Home() {
       description: itemDescription,
     };
 
-    setItems((prevState) => [...prevState, newItem]);
+    await itemsStorage.add(newItem);
+    await getItemsByStatus();
+
+    Alert.alert("Sucesso", `Item adicionado à lista: ${itemDescription}`);
+    setFilter(FilterStatus.PENDING);
     setItemDescription("");
   }
 
-  function clearList() {
-    setItems([]);
+  async function handleRemove(id: string) {
+    try {
+      await itemsStorage.remove(id);
+      await getItemsByStatus();
+    } catch (error) {
+      Alert.alert("Erro", "Não foi possível remover o item.");
+      console.warn("Error removing item:", error);
+    }
   }
+
+  function handleClear() {
+    Alert.alert("Limpar", "Deseja remover todos os itens da lista?", [
+      {
+        text: "Não",
+        style: "cancel",
+      },
+      {
+        text: "Sim",
+        onPress: () => onClear(),
+      },
+    ]);
+  }
+
+  async function onClear() {
+    try {
+      await itemsStorage.clear();
+      setItems([]);
+      Alert.alert("Sucesso", "Todos os itens foram removidos da lista.");
+    } catch (error) {
+      console.warn("Error clearing items:", error);
+      Alert.alert("Erro", "Não foi possível limpar a lista.");
+    }
+  }
+
+  async function getItemsByStatus() {
+    try {
+      const response = await itemsStorage.getByStatus(filter);
+      setItems(response);
+    } catch (error) {
+      Alert.alert("Erro", "Não foi possível carregar os itens.");
+      console.warn("Error loading items:", error);
+    }
+  }
+
+  async function handleToggleStatus(id: string) {
+    try {
+      await itemsStorage.toggleStatus(id);
+      await getItemsByStatus();
+    } catch (error) {
+      Alert.alert("Erro", "Não foi possível atualizar o status do item.");
+      console.warn("Error toggling item status:", error);
+    }
+  }
+
+  useEffect(() => {
+    getItemsByStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
 
   return (
     <View style={styles.container}>
@@ -69,7 +129,7 @@ export function Home() {
             />
           ))}
 
-          <TouchableOpacity style={styles.clearButton} onPress={clearList}>
+          <TouchableOpacity style={styles.clearButton} onPress={handleClear}>
             <Text style={styles.clearText}>Limpar</Text>
           </TouchableOpacity>
         </View>
@@ -80,8 +140,8 @@ export function Home() {
           renderItem={({ item }) => (
             <Item
               data={item}
-              onStatus={() => undefined}
-              onRemove={() => undefined}
+              onStatus={() => handleToggleStatus(item.id)}
+              onRemove={() => handleRemove(item.id)}
             />
           )}
           showsVerticalScrollIndicator={false}
